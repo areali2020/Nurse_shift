@@ -1,11 +1,932 @@
 <!DOCTYPE html>
 <html lang="ku" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<title>تاقیکردنەوە</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+<title>سیستەمی شیفتی پەرستاران - CMC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+<!-- Firebase SDKs (compat, no build step needed) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<!-- Excel export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { font-family: 'Noto Sans Arabic', sans-serif; background: #f3f7f9; direction: rtl; }
+  button, input, select, textarea { font-family: inherit; }
+
+  #root { min-height: 100vh; }
+
+  .shell {
+    min-height: 100vh;
+    background: linear-gradient(160deg,#0f2436,#163a52 55%,#1b5e4f);
+    display: flex; align-items: center; justify-content: center; padding: 18px;
+  }
+  .card {
+    background: #fff; border-radius: 20px; padding: 28px; width: 100%; max-width: 380px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+  }
+  .logo-row { text-align: center; margin-bottom: 18px; }
+  .logo-row .emoji { font-size: 36px; }
+  .logo-row h1 { font-size: 19px; font-weight: 800; color: #163a52; margin-top: 6px; }
+  .logo-row p { font-size: 12px; color: #7c93a3; }
+
+  .tab-row { display: flex; gap: 8px; margin-bottom: 18px; background: #f3f6f8; padding: 5px; border-radius: 12px; }
+  .tab-btn { flex: 1; padding: 9px; border: none; background: transparent; border-radius: 8px; font-size: 13px; font-weight: 600; color: #7c93a3; cursor: pointer; }
+  .tab-btn.active { background: #fff; color: #163a52; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; font-weight: 700; color: #7c93a3; margin-bottom: 6px; }
+  .field input, .field select { width: 100%; padding: 12px 14px; border-radius: 10px; border: 2px solid #e3edf2; font-size: 14px; outline: none; text-align: right; }
+  .field input:focus, .field select:focus { border-color: #2563a8; }
+
+  .btn-primary { width: 100%; padding: 13px; border-radius: 10px; border: none; background: linear-gradient(135deg,#1b8a6b,#13a37a); color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; margin-top: 4px; }
+  .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn-danger { background: linear-gradient(135deg,#c0392b,#e74c3c); }
+  .btn-dark { background: #163a52; }
+
+  .error-box { background: #fdecea; color: #c0392b; padding: 8px 12px; border-radius: 8px; font-size: 12.5px; margin-bottom: 12px; text-align: center; }
+  .ok-box { background: #eafaf1; color: #1b8a6b; padding: 8px 12px; border-radius: 8px; font-size: 12.5px; margin-bottom: 12px; text-align: center; }
+  .muted { font-size: 13px; color: #7c93a3; }
+
+  .app-wrap { min-height: 100vh; background: #f3f7f9; }
+  .topbar { color: #fff; padding: 16px 18px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+  .topbar .left { display: flex; align-items: center; gap: 10px; }
+  .topbar .left .ic { font-size: 20px; }
+  .topbar .left .ttl { font-weight: 800; font-size: 15px; }
+  .topbar .right { display: flex; align-items: center; gap: 12px; }
+  .logout-btn { background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 7px 14px; border-radius: 8px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+
+  .toast { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); background: #163a52; color: #fff; padding: 10px 20px; border-radius: 10px; font-size: 13px; z-index: 200; box-shadow: 0 6px 20px rgba(0,0,0,0.25); }
+
+  .month-nav { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 12px; }
+  .nav-btn { width: 38px; height: 38px; border-radius: 10px; border: 1px solid #dfe6ea; background: #fff; font-size: 18px; font-weight: 700; color: #37505f; cursor: pointer; }
+  .month-label { text-align: center; }
+  .month-label .m { font-weight: 800; font-size: 15px; }
+  .month-label .s { font-size: 11px; font-weight: 700; }
+
+  .banner-warn { background: #fff8e1; border: 1px solid #ffd54f; color: #8a6d1f; padding: 10px 14px; border-radius: 10px; font-size: 12.5px; font-weight: 600; text-align: center; margin: 0 16px 14px; }
+
+  .day-card { background: #fff; border: 1.5px solid #e7edf0; border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; }
+  .day-header { display: flex; align-items: center; justify-content: space-between; }
+  .day-num { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; }
+  .day-wd { font-size: 13px; font-weight: 700; color: #37505f; }
+  .locked-tag { font-size: 11px; font-weight: 700; color: #c0392b; background: #fdecea; padding: 3px 9px; border-radius: 20px; }
+  .lock-toggle { border: none; padding: 5px 10px; border-radius: 7px; font-size: 11px; font-weight: 700; cursor: pointer; }
+
+  .cells-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 6px; margin-top: 10px; }
+  .shift-cell { border: 1.5px solid #dfe6ea; border-radius: 9px; padding: 7px 9px; text-align: center; cursor: pointer; position: relative; }
+  .shift-cell .lbl { font-size: 10.5px; opacity: 0.85; font-weight: 700; }
+  .shift-cell .val { font-size: 12.5px; font-weight: 700; margin-top: 2px; }
+  .clear-x { position: absolute; top: -6px; left: -6px; width: 18px; height: 18px; border-radius: 50%; border: none; background: #c0392b; color: #fff; font-size: 10px; cursor: pointer; line-height: 1; }
+
+  .free-input { width: 100%; border: none; background: transparent; outline: none; padding: 2px 8px 7px; font-size: 12.5px; font-weight: 700; text-align: center; }
+  .free-label { font-size: 10.5px; font-weight: 700; opacity: 0.8; padding: 6px 8px 0; }
+
+  .notes-grid { display: grid; gap: 6px; margin-top: 8px; }
+  .note-cell { border: 1.5px dashed #dfe6ea; border-radius: 8px; padding: 7px 8px; font-size: 11.5px; outline: none; text-align: center; background: #fff; width: 100%; }
+
+  .admin-tab-row { display: flex; gap: 8px; padding: 16px 16px 6px; }
+  .admin-tab { flex: 1; padding: 10px; border: 1px solid #e3edf2; background: #fff; border-radius: 10px; font-size: 13px; font-weight: 700; color: #7c93a3; cursor: pointer; }
+  .admin-tab.active { background: #163a52; color: #fff; border-color: #163a52; }
+  .panel-card { background: #fff; border: 1px solid #e7edf0; border-radius: 14px; padding: 18px; margin-bottom: 16px; margin-inline: 16px; }
+  .panel-title { font-weight: 800; font-size: 14px; color: #163a52; margin: 18px 16px 10px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .nurse-row { display: flex; align-items: center; justify-content: space-between; background: #fff; border: 1px solid #eef1f3; border-radius: 10px; padding: 9px 12px; margin-bottom: 6px; margin-inline: 16px; }
+  .mini-select { font-size: 11px; padding: 5px 6px; border-radius: 6px; border: 1px solid #dfe6ea; max-width: 90px; }
+  .mini-btn { border: 1px solid #dfe6ea; background: #fff; border-radius: 7px; width: 30px; height: 30px; cursor: pointer; font-size: 13px; }
+  .dept-picker-row { display: flex; gap: 6px; overflow-x: auto; padding: 16px 16px 4px; margin: 0 0 4px; }
+  .dept-pill { border: 1.5px solid; padding: 8px 14px; border-radius: 20px; font-size: 12.5px; font-weight: 700; white-space: nowrap; cursor: pointer; flex-shrink: 0; background: #fff; }
+
+  .splash { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #0f1b24; color: #cfe8e0; }
+  .splash .inner { text-align: center; }
+  .splash .e { font-size: 40px; margin-bottom: 10px; }
+</style>
 </head>
 <body>
-<h1>سیستەمەکە کارا دەبێت!</h1>
-<p>ئەمە تاقیکردنەوەیەکی سادەیە بۆ زانینی ئایا کۆپی-پەیست کاردەکات.</p>
+<div id="root"><div class="splash"><div class="inner"><div class="e">🩺</div><div>چاوەڕوان بە...</div></div></div></div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCVZvx4tWY6aDtRWdTOSXMRiGp3nFaGGKs",
+  authDomain: "cmc-nursing.firebaseapp.com",
+  projectId: "cmc-nursing",
+  storageBucket: "cmc-nursing.firebasestorage.app",
+  messagingSenderId: "911915374509",
+  appId: "1:911915374509:web:5048782645b92611967324",
+  measurementId: "G-PPRPR9WFLF"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+const ADMIN_PASS = "cmc124533cmc2016";
+
+const DEPARTMENTS = {
+  emergency: {
+    name: "فریاکەوتن", sub: "Emergency Department", color: "#c0392b", soft: "#fdecea",
+    rows: [
+      { key: "m1", label: "Morning 1", hours: 6 },
+      { key: "m2", label: "Morning 2", hours: 6 },
+      { key: "e1", label: "Evening 1", hours: 6 },
+      { key: "e2", label: "Evening 2", hours: 6 },
+      { key: "support", label: "Support", hours: 6 },
+      { key: "nightSupport", label: "Night Support", hours: 8 },
+      { key: "n1", label: "Night 1", hours: 12 },
+      { key: "n2", label: "Night 2", hours: 12 },
+    ],
+    notes: 3,
+  },
+  nicu: {
+    name: "خدج", sub: "NICU", color: "#2471a3", soft: "#eaf2f8",
+    rows: [
+      { key: "m1", label: "Morning", hours: 6 },
+      { key: "e1", label: "Evening", hours: 6 },
+      { key: "n1", label: "Night", hours: 12 },
+      { key: "oc1", label: "OnCall 1", hours: 0, freeText: true },
+      { key: "oc2", label: "OnCall 2", hours: 0, freeText: true },
+      { key: "oc3", label: "OnCall 3", hours: 0, freeText: true },
+    ],
+    notes: 3,
+  },
+  cardiac: {
+    name: "نهۆمی دل", sub: "Cardiac Floor", color: "#a93266", soft: "#fbeef5",
+    rows: [
+      { key: "m1", label: "Morning", hours: 6 },
+      { key: "e1", label: "Evening", hours: 6 },
+      { key: "n1", label: "Night", hours: 12 },
+      { key: "oc1", label: "OnCall 1", hours: 0, freeText: true },
+      { key: "oc2", label: "OnCall 2", hours: 0, freeText: true },
+    ],
+    notes: 3,
+  },
+  general: {
+    name: "گشتی", sub: "General Floor", color: "#7d3c98", soft: "#f4ecf7",
+    rows: [
+      { key: "m1", label: "Morning 1", hours: 6 }, { key: "m2", label: "Morning 2", hours: 6 },
+      { key: "m3", label: "Morning 3", hours: 6 }, { key: "m4", label: "Morning 4", hours: 6 },
+      { key: "m5", label: "Morning 5", hours: 6 },
+      { key: "e1", label: "Evening 1", hours: 6 }, { key: "e2", label: "Evening 2", hours: 6 },
+      { key: "e3", label: "Evening 3", hours: 6 }, { key: "e4", label: "Evening 4", hours: 6 },
+      { key: "e5", label: "Evening 5", hours: 6 },
+      { key: "oc1", label: "OnCall 1", hours: 0, freeText: true, codeEntry: true },
+      { key: "oc2", label: "OnCall 2", hours: 0, freeText: true, codeEntry: true },
+      { key: "oc3", label: "OnCall 3", hours: 0, freeText: true, codeEntry: true },
+      { key: "oc4", label: "OnCall 4", hours: 0, freeText: true, codeEntry: true },
+    ],
+    notes: 3,
+  },
+  pediatric: {
+    name: "نهۆمی منداڵان", sub: "Pediatric Floor", color: "#1e8449", soft: "#eafaf1",
+    rows: [
+      { key: "m1", label: "Morning 1", hours: 6 }, { key: "m2", label: "Morning 2", hours: 6 },
+      { key: "e1", label: "Evening 1", hours: 6 }, { key: "e2", label: "Evening 2", hours: 6 },
+      { key: "n1", label: "Night 1", hours: 12 }, { key: "n2", label: "Night 2", hours: 12 },
+      { key: "oc1", label: "OnCall 1", hours: 0, freeText: true },
+      { key: "oc2", label: "OnCall 2", hours: 0, freeText: true },
+      { key: "oc3", label: "OnCall 3", hours: 0, freeText: true },
+    ],
+    notes: 3,
+  },
+};
+
+const KURDISH_MONTHS = ["کانوونی دووەم","شوبات","ئازار","نیسان","ئایار","حوزەیران","تەممووز","ئاب","ئەیلوول","تشرینی یەکەم","تشرینی دووەم","کانوونی یەکەم"];
+const WEEKDAYS = ["یەکشەممە","دووشەممە","سێشەممە","چوارشەممە","پێنجشەممە","هەینی","شەممە"];
+
+function monthKey(d) { return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); }
+function daysInMonth(y,m) { return new Date(y, m+1, 0).getDate(); }
+function uid() { return Math.random().toString(36).slice(2,10); }
+function el(tag, props, children) {
+  const e = document.createElement(tag);
+  if (props) for (const k in props) {
+    if (k === "style") Object.assign(e.style, props[k]);
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2).toLowerCase(), props[k]);
+    else if (k === "html") e.innerHTML = props[k];
+    else e.setAttribute(k, props[k]);
+  }
+  if (children) (Array.isArray(children)?children:[children]).forEach(c => {
+    if (c == null) return;
+    e.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+  });
+  return e;
+}
+function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+async function getDoc(col, id) {
+  const snap = await db.collection(col).doc(id).get();
+  return snap.exists ? snap.data() : null;
+}
+async function setDoc(col, id, data) {
+  await db.collection(col).doc(id).set(data, { merge: false });
+}
+async function getNurses() {
+  const snap = await db.collection("nurses").get();
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+async function getActiveMonths() {
+  const data = await getDoc("meta", "activeMonths");
+  return data?.months || [];
+}
+async function setActiveMonths(months) {
+  await setDoc("meta", "activeMonths", { months });
+}
+async function getRoster(deptKey, mKey) {
+  const data = await getDoc("rosters", deptKey + "_" + mKey);
+  return data || { days: {} };
+}
+async function setRoster(deptKey, mKey, roster) {
+  await setDoc("rosters", deptKey + "_" + mKey, roster);
+}
+
+const root = document.getElementById("root");
+let SESSION = null;
+
+async function boot() {
+  renderLogin();
+}
+
+function renderLogin() {
+  clear(root);
+  let mode = "nurse";
+  let errorMsg = "";
+
+  const shell = el("div", { class: "shell" });
+  root.appendChild(shell);
+
+  function draw() {
+    clear(shell);
+    const card = el("div", { class: "card" });
+
+    card.appendChild(el("div", { class: "logo-row" }, [
+      el("div", { class: "emoji" }, "🏥"),
+      el("h1", null, "سیستەمی شیفتی پەرستاران"),
+      el("p", null, "CMC Hospital — Nursing Roster"),
+    ]));
+
+    const tabRow = el("div", { class: "tab-row" });
+    const nurseTab = el("button", { class: "tab-btn" + (mode === "nurse" ? " active" : ""), onClick: () => { mode = "nurse"; errorMsg=""; draw(); } }, "👩‍⚕️ پەرستار");
+    const adminTab = el("button", { class: "tab-btn" + (mode === "admin" ? " active" : ""), onClick: () => { mode = "admin"; errorMsg=""; draw(); } }, "🛡️ ئەدمین");
+    tabRow.appendChild(nurseTab); tabRow.appendChild(adminTab);
+    card.appendChild(tabRow);
+
+    let usernameInput, passwordInput;
+
+    if (mode === "nurse") {
+      const f1 = el("div", { class: "field" }, [el("label", null, "ناوی بەکارهێنەر")]);
+      usernameInput = el("input", { type: "text" });
+      f1.appendChild(usernameInput);
+      card.appendChild(f1);
+    }
+
+    const f2 = el("div", { class: "field" }, [el("label", null, mode === "admin" ? "وشەی نهێنی ئەدمین" : "وشەی نهێنی")]);
+    passwordInput = el("input", { type: "password" });
+    passwordInput.addEventListener("keydown", (e) => { if (e.key === "Enter") tryLogin(); });
+    f2.appendChild(passwordInput);
+    card.appendChild(f2);
+
+    if (errorMsg) card.appendChild(el("div", { class: "error-box" }, errorMsg));
+
+    const loginBtn = el("button", { class: "btn-primary", onClick: tryLogin }, "چوونەژوورەوە");
+    card.appendChild(loginBtn);
+
+    shell.appendChild(card);
+
+    async function tryLogin() {
+      errorMsg = "";
+      loginBtn.disabled = true; loginBtn.textContent = "چاوەڕوان بە...";
+
+      if (mode === "admin") {
+        if (passwordInput.value === ADMIN_PASS) {
+          SESSION = { type: "admin" };
+          renderAdminApp();
+          return;
+        }
+        errorMsg = "وشەی نهێنی هەڵەیە";
+        loginBtn.disabled = false; loginBtn.textContent = "چوونەژوورەوە";
+        draw();
+        return;
+      }
+
+      try {
+        const nurses = await getNurses();
+        const uname = usernameInput.value.trim().toLowerCase();
+        const nurse = nurses.find(n => n.username.toLowerCase() === uname && n.password === passwordInput.value);
+        if (!nurse) { errorMsg = "ناو یان وشەی نهێنی هەڵەیە"; loginBtn.disabled=false; loginBtn.textContent="چوونەژوورەوە"; draw(); return; }
+        if (nurse.disabled) { errorMsg = "ئەم ئەکاونتە ڕاگیراوە، پەیوەندی بە ئەدمین بکە"; loginBtn.disabled=false; loginBtn.textContent="چوونەژوورەوە"; draw(); return; }
+        if (nurse.mustChangePassword) { renderForceChangePassword(nurse); return; }
+        SESSION = { type: "nurse", nurse };
+        renderNurseApp();
+      } catch (e) {
+        console.error(e);
+        errorMsg = "هەڵەیەک ڕووی دا، تکایە دووبارە هەوڵ بدەوە";
+        loginBtn.disabled = false; loginBtn.textContent = "چوونەژوورەوە";
+        draw();
+      }
+    }
+  }
+
+  draw();
+}
+
+function renderForceChangePassword(nurse) {
+  clear(root);
+  const shell = el("div", { class: "shell" });
+  root.appendChild(shell);
+  let errorMsg = "";
+
+  function draw() {
+    clear(shell);
+    const card = el("div", { class: "card" });
+    card.appendChild(el("div", { style: { fontSize: "30px", textAlign: "center", marginBottom: "6px" } }, "🔑"));
+    card.appendChild(el("h2", { style: { fontSize: "17px", fontWeight: "800", color: "#163a52", textAlign: "center", marginBottom: "4px" } }, "وشەی نهێنی نوێ دابنێ"));
+    card.appendChild(el("p", { class: "muted", style: { textAlign: "center", marginBottom: "20px" } }, `بۆ سەلامەتی، تکایە وشەیەکی نهێنی نوێ بۆ خۆت دابنێ، ${nurse.name}`));
+
+    const f1 = el("div", { class: "field" }, [el("label", null, "وشەی نهێنی نوێ")]);
+    const p1 = el("input", { type: "password" }); f1.appendChild(p1);
+    const f2 = el("div", { class: "field" }, [el("label", null, "دووبارەی بکەرەوە")]);
+    const p2 = el("input", { type: "password" }); f2.appendChild(p2);
+    card.appendChild(f1); card.appendChild(f2);
+
+    if (errorMsg) card.appendChild(el("div", { class: "error-box" }, errorMsg));
+
+    const btn = el("button", { class: "btn-primary" }, "پاشەکەوتکردن و چوونەژوورەوە");
+    btn.addEventListener("click", async () => {
+      if (p1.value.length < 4) { errorMsg = "وشەی نهێنی دەبێ لانیکەم ٤ پیت بێت"; draw(); return; }
+      if (p1.value !== p2.value) { errorMsg = "وشە نهێنیەکان وەک یەک نین"; draw(); return; }
+      btn.disabled = true; btn.textContent = "چاوەڕوان بە...";
+      const updated = { ...nurse, password: p1.value, mustChangePassword: false };
+      await setDoc("nurses", nurse.id, updated);
+      SESSION = { type: "nurse", nurse: updated };
+      renderNurseApp();
+    });
+    card.appendChild(btn);
+    shell.appendChild(card);
+  }
+  draw();
+}
+
+function buildTopBar(title, icon, color, onLogout, rightExtra) {
+  const bar = el("div", { class: "topbar", style: { background: `linear-gradient(135deg, ${color}, ${color}cc)` } });
+  bar.appendChild(el("div", { class: "left" }, [
+    el("div", { class: "ic" }, icon),
+    el("div", { class: "ttl" }, title),
+  ]));
+  const right = el("div", { class: "right" });
+  if (rightExtra) right.appendChild(rightExtra);
+  right.appendChild(el("button", { class: "logout-btn", onClick: onLogout }, "دەرچوون"));
+  bar.appendChild(right);
+  return bar;
+}
+
+function showToast(msg) {
+  const t = el("div", { class: "toast" }, msg);
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2200);
+}
+
+function renderNurseApp() {
+  const nurse = SESSION.nurse;
+  const dept = DEPARTMENTS[nurse.dept];
+  clear(root);
+
+  const wrap = el("div", { class: "app-wrap" });
+  root.appendChild(wrap);
+
+  const today = new Date();
+  let cursor = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  wrap.appendChild(buildTopBar(
+    `${dept.name} · ${nurse.name}`, "👩‍⚕️", dept.color,
+    () => { SESSION = null; renderLogin(); },
+    el("span", { style: { fontSize: "12px", opacity: "0.85" } }, "@" + nurse.username)
+  ));
+
+  const body = el("div");
+  wrap.appendChild(body);
+
+  let roster = { days: {} };
+  let activeMonths = [];
+  let pollTimer = null;
+
+  async function load() {
+    const mKey = monthKey(cursor);
+    roster = await getRoster(nurse.dept, mKey);
+    activeMonths = await getActiveMonths();
+    draw();
+  }
+
+  function draw() {
+    clear(body);
+    const mKey = monthKey(cursor);
+    const isActive = activeMonths.includes(mKey);
+    const dim = daysInMonth(cursor.getFullYear(), cursor.getMonth());
+
+    body.appendChild(buildMonthNav(cursor, isActive,
+      () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth()-1, 1); load(); },
+      () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1); load(); }
+    ));
+
+    if (!isActive) {
+      body.appendChild(el("div", { class: "banner-warn" }, "⏳ ئەم مانگە هێشتا لەلایەن ئەدمین چالاک نەکراوە. تەنها بینین دەکرێت."));
+    }
+
+    const daysWrap = el("div", { style: { padding: "0 16px 90px" } });
+    for (let day = 1; day <= dim; day++) {
+      daysWrap.appendChild(buildDayCard({
+        day, cursor, dept,
+        data: roster.days[day] || { cells: {}, notes: [], locked: false },
+        nurseId: nurse.id,
+        readOnly: !isActive,
+        onClaim: (rowKey) => claimCell(day, rowKey),
+        onFreeText: (rowKey, text) => setFreeText(day, rowKey, text),
+        onNote: (idx, text) => setNote(day, idx, text),
+      }));
+    }
+    body.appendChild(daysWrap);
+  }
+
+  async function claimCell(day, rowKey) {
+    const mKey = monthKey(cursor);
+    if (!activeMonths.includes(mKey)) { showToast("⛔ ئەم مانگە چالاک نییە"); return; }
+    const fresh = await getRoster(nurse.dept, mKey);
+    const dayData = fresh.days[day] || { cells: {}, notes: [], locked: false };
+    if (dayData.locked) { showToast("🔒 ئەم ڕۆژە قوفلکراوە"); return; }
+
+    const row = dept.rows.find(r => r.key === rowKey);
+    const current = dayData.cells[rowKey];
+if (current && current.nurseId === nurse.id) {
+      delete dayData.cells[rowKey];
+    } else if (!current) {
+      dayData.cells[rowKey] = { nurseId: nurse.id, name: nurse.name, hours: row.hours };
+    } else {
+      showToast("⚠️ ئەم خانەیە پێشتر گیراوە");
+      return;
+    }
+    fresh.days[day] = dayData;
+    await setRoster(nurse.dept, mKey, fresh);
+    roster = fresh;
+    draw();
+  }
+
+  async function setFreeText(day, rowKey, text) {
+    const mKey = monthKey(cursor);
+    if (!activeMonths.includes(mKey)) { showToast("⛔ ئەم مانگە چالاک نییە"); return; }
+    const fresh = await getRoster(nurse.dept, mKey);
+    const dayData = fresh.days[day] || { cells: {}, notes: [], locked: false };
+    if (dayData.locked) { showToast("🔒 ئەم ڕۆژە قوفلکراوە"); return; }
+    const row = dept.rows.find(r => r.key === rowKey);
+
+    if (!text.trim()) {
+      delete dayData.cells[rowKey];
+    } else {
+      let hours = 0;
+      const upper = text.trim().toUpperCase();
+      if (row.codeEntry) {
+        if (upper === "M" || upper === "E") hours = 6;
+        else if (upper === "N") hours = 12;
+      }
+      dayData.cells[rowKey] = { nurseId: nurse.id, name: nurse.name, short: text.trim(), hours, isFreeText: true };
+    }
+    fresh.days[day] = dayData;
+    await setRoster(nurse.dept, mKey, fresh);
+    roster = fresh;
+    draw();
+  }
+
+  async function setNote(day, idx, text) {
+    const mKey = monthKey(cursor);
+    if (!activeMonths.includes(mKey)) return;
+    const fresh = await getRoster(nurse.dept, mKey);
+    const dayData = fresh.days[day] || { cells: {}, notes: [], locked: false };
+    if (dayData.locked) { showToast("🔒 ئەم ڕۆژە قوفلکراوە"); return; }
+    const notes = [...(dayData.notes || [])];
+    while (notes.length < dept.notes) notes.push("");
+    notes[idx] = text;
+    dayData.notes = notes;
+    fresh.days[day] = dayData;
+    await setRoster(nurse.dept, mKey, fresh);
+    roster = fresh;
+  }
+
+  load();
+  pollTimer = setInterval(load, 5000);
+}
+
+function buildMonthNav(cursor, isActive, onPrev, onNext) {
+  const wrap = el("div", { class: "month-nav" });
+  wrap.appendChild(el("button", { class: "nav-btn", onClick: onPrev }, "‹"));
+  const label = el("div", { class: "month-label" }, [
+    el("div", { class: "m" }, `${KURDISH_MONTHS[cursor.getMonth()]} ${cursor.getFullYear()}`),
+    el("div", { class: "s", style: { color: isActive ? "#1b8a6b" : "#c0392b" } }, isActive ? "● چالاکە" : "○ ناچالاکە"),
+  ]);
+  wrap.appendChild(label);
+  wrap.appendChild(el("button", { class: "nav-btn", onClick: onNext }, "›"));
+  return wrap;
+}
+
+function buildDayCard({ day, cursor, dept, data, nurseId, readOnly, onClaim, onFreeText, onNote, adminMode, onToggleLock, onClearCell }) {
+  const date = new Date(cursor.getFullYear(), cursor.getMonth(), day);
+  const weekday = WEEKDAYS[date.getDay()];
+  const locked = data.locked;
+
+  const card = el("div", { class: "day-card", style: { borderColor: locked ? "#e8b4a8" : "#e7edf0", opacity: (!adminMode && locked) ? "0.85" : "1" } });
+
+  const header = el("div", { class: "day-header" });
+  const left = el("div", { style: { display: "flex", alignItems: "center", gap: "8px" } }, [
+    el("div", { class: "day-num", style: { background: dept.soft, color: dept.color } }, String(day)),
+    el("div", { class: "day-wd" }, weekday),
+  ]);
+
+  if (adminMode) {
+    let totalHours = 0;
+    dept.rows.forEach(r => { if (data.cells?.[r.key]) totalHours += data.cells[r.key].hours || 0; });
+    left.appendChild(el("div", { style: { fontSize: "11px", color: "#9aabb5" } }, `کۆی کاتژمێر: ${totalHours}`));
+  }
+  header.appendChild(left);
+
+  if (adminMode) {
+    const lockBtn = el("button", {
+      class: "lock-toggle",
+      style: { background: locked ? "#c0392b" : "#eef1f3", color: locked ? "#fff" : "#37505f" },
+      onClick: onToggleLock,
+    }, locked ? "🔒 کراوەتەوە بکە" : "🔓 قوفلی بکە");
+    header.appendChild(lockBtn);
+  } else if (locked) {
+    header.appendChild(el("span", { class: "locked-tag" }, "🔒 قوفلکراو"));
+  }
+  card.appendChild(header);
+
+  const grid = el("div", { class: "cells-grid" });
+  dept.rows.forEach(row => {
+    const cell = data.cells?.[row.key];
+    const mine = cell && cell.nurseId === nurseId;
+
+    if (adminMode) {
+      const c = el("div", { class: "shift-cell", style: { background: cell ? dept.color : "#fff", color: cell ? "#fff" : "#7c93a3" } });
+      c.appendChild(el("div", { class: "lbl" }, row.label));
+      c.appendChild(el("div", { class: "val" }, cell ? (cell.isFreeText ? `${cell.name} (${cell.short})` : cell.name) : "—"));
+      if (cell) {
+        const xBtn = el("button", { class: "clear-x", onClick: (e) => { e.stopPropagation(); onClearCell(row.key); } }, "✕");
+        c.appendChild(xBtn);
+      }
+      grid.appendChild(c);
+      return;
+    }
+
+    if (row.freeText) {
+      const c = el("div", { class: "shift-cell", style: { padding: "0", background: cell ? (mine ? dept.color : "#eef1f3") : "#fff" } });
+      c.appendChild(el("div", { class: "free-label", style: { color: cell && mine ? "#fff" : "#7c93a3" } }, row.label + (row.codeEntry ? " (M/E/N)" : "")));
+      const input = el("input", {
+        class: "free-input",
+        placeholder: "ناو...",
+        style: { color: cell && mine ? "#fff" : "#37505f" },
+        disabled: readOnly || locked || (cell && !mine) ? "disabled" : null,
+      });
+      input.value = cell?.short || "";
+      input.addEventListener("blur", () => onFreeText(row.key, input.value));
+      input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
+      c.appendChild(input);
+      grid.appendChild(c);
+      return;
+    }
+
+    const disabled = readOnly || locked || (cell && !mine);
+    const c = el("button", {
+      class: "shift-cell",
+      style: {
+        background: cell ? (mine ? dept.color : "#eef1f3") : "#fff",
+        color: cell ? (mine ? "#fff" : "#7c93a3") : "#37505f",
+        borderColor: cell ? (mine ? dept.color : "#dfe6ea") : "#dfe6ea",
+        cursor: disabled ? "not-allowed" : "pointer",
+      },
+      onClick: disabled ? null : () => onClaim(row.key),
+    });
+    c.appendChild(el("div", { class: "lbl" }, row.label));
+    c.appendChild(el("div", { class: "val" }, cell ? cell.name : "+ بگرە"));
+    grid.appendChild(c);
+  });
+  card.appendChild(grid);
+
+  const notesGrid = el("div", { class: "notes-grid", style: { gridTemplateColumns: `repeat(${dept.notes},1fr)` } });
+  for (let i = 0; i < dept.notes; i++) {
+    if (adminMode) {
+      notesGrid.appendChild(el("div", { class: "note-cell", style: { background: "#f8fafb", color: "#5a6f7c", display: "flex", alignItems: "center", justifyContent: "center" } }, data.notes?.[i] || ""));
+    } else {
+      const ninput = el("input", { class: "note-cell", placeholder: `Note ${i+1}`, disabled: (readOnly || locked) ? "disabled" : null });
+      ninput.value = data.notes?.[i] || "";
+      ninput.addEventListener("blur", () => onNote(i, ninput.value));
+      notesGrid.appendChild(ninput);
+    }
+  }
+  card.appendChild(notesGrid);
+
+  return card;
+}
+
+function renderAdminApp() {
+  clear(root);
+  const wrap = el("div", { class: "app-wrap" });
+  root.appendChild(wrap);
+
+  wrap.appendChild(buildTopBar("داشبۆردی ئەدمین", "🛡️", "#163a52", () => { SESSION = null; renderLogin(); }));
+
+  let tab = "roster";
+  const tabRow = el("div", { class: "admin-tab-row" });
+  const body = el("div");
+
+  function drawTabs() {
+    clear(tabRow);
+    tabRow.appendChild(el("button", { class: "admin-tab" + (tab === "roster" ? " active" : ""), onClick: () => { tab = "roster"; drawTabs(); drawBody(); } }, "📅 شیفتەکان"));
+    tabRow.appendChild(el("button", { class: "admin-tab" + (tab === "nurses" ? " active" : ""), onClick: () => { tab = "nurses"; drawTabs(); drawBody(); } }, "👥 ئەکاونتی نێرسەکان"));
+  }
+
+  let deptKey = "emergency";
+
+  function drawBody() {
+    clear(body);
+    if (tab === "nurses") {
+      buildNurseManager(body);
+    } else {
+      buildAdminRoster(body, deptKey, (k) => { deptKey = k; drawBody(); });
+    }
+  }
+
+  drawTabs();
+  wrap.appendChild(tabRow);
+  wrap.appendChild(body);
+  drawBody();
+}
+
+async function buildNurseManager(container) {
+  let nurses = await getNurses();
+  let createdInfo = null;
+  let errorMsg = "";
+
+  function draw() {
+    clear(container);
+
+    const addPanel = el("div", { class: "panel-card" });
+    addPanel.appendChild(el("div", { class: "panel-title", style: { margin: "0 0 14px" } }, "➕ زیادکردنی نێرسی نوێ"));
+
+    const grid = el("div", { class: "grid-2" });
+    const nameField = el("div", { class: "field" }, [el("label", null, "ناوی تەواو")]);
+    const nameInput = el("input", { type: "text" }); nameField.appendChild(nameInput);
+    const userField = el("div", { class: "field" }, [el("label", null, "ناوی بەکارهێنەر")]);
+    const userInput = el("input", { type: "text", style: { direction: "ltr" } }); userField.appendChild(userInput);
+    grid.appendChild(nameField); grid.appendChild(userField);
+    addPanel.appendChild(grid);
+
+    const deptField = el("div", { class: "field" }, [el("label", null, "بەش")]);
+    const deptSelect = el("select");
+    Object.entries(DEPARTMENTS).forEach(([k,d]) => deptSelect.appendChild(el("option", { value: k }, `${d.name} (${d.sub})`)));
+    deptField.appendChild(deptSelect);
+    addPanel.appendChild(deptField);
+
+    if (errorMsg) addPanel.appendChild(el("div", { class: "error-box" }, errorMsg));
+
+    const addBtn = el("button", { class: "btn-primary" }, "زیادکردن");
+    addBtn.addEventListener("click", async () => {
+      errorMsg = "";
+      const name = nameInput.value.trim();
+      const username = userInput.value.trim();
+if (!name || !username) { errorMsg = "ناو و ناوی بەکارهێنەر پێویستن"; draw(); return; }
+      const list = await getNurses();
+      if (list.some(n => n.username.toLowerCase() === username.toLowerCase())) {
+        errorMsg = "ئەم ناوی بەکارهێنەرە پێشتر بەکارهاتووە"; draw(); return;
+      }
+      const tempPass = String(Math.floor(1000 + Math.random()*9000));
+      const newNurse = { name, username, password: tempPass, dept: deptSelect.value, mustChangePassword: true, disabled: false };
+      const id = uid();
+      await setDoc("nurses", id, newNurse);
+      createdInfo = { id, ...newNurse };
+      nurses = await getNurses();
+      draw();
+    });
+    addPanel.appendChild(addBtn);
+    container.appendChild(addPanel);
+
+    if (createdInfo) {
+      const infoPanel = el("div", { class: "panel-card", style: { background: "#eafaf1", border: "1px solid #b6e6c9" } });
+      infoPanel.appendChild(el("div", { style: { fontWeight: "800", color: "#1b8a6b", marginBottom: "8px" } }, "✅ ئەکاونت ئامادەیە"));
+      infoPanel.appendChild(el("div", { style: { fontSize: "13px", lineHeight: "1.8" } }, [
+        el("div", null, ["ناوی بەکارهێنەر: ", el("strong", { style: { direction: "ltr", display: "inline-block" } }, createdInfo.username)]),
+        el("div", null, ["وشەی نهێنی سەرەتایی: ", el("strong", { style: { direction: "ltr", display: "inline-block" } }, createdInfo.password)]),
+      ]));
+      infoPanel.appendChild(el("div", { style: { fontSize: "12px", color: "#5a8270", marginTop: "8px" } }, "ئەمە بدە بە نێرسەکە — کاتێک یەکەم جار لۆگین بکات پێی دەوترێت وشەی نهێنی نوێ دابنێ."));
+      const okBtn = el("button", { class: "btn-primary", style: { background: "#1b8a6b", marginTop: "12px" } }, "تەواو");
+      okBtn.addEventListener("click", () => { createdInfo = null; draw(); });
+      infoPanel.appendChild(okBtn);
+      container.appendChild(infoPanel);
+    }
+
+    container.appendChild(el("div", { class: "panel-title" }, `📋 هەموو نێرسەکان (${nurses.length})`));
+
+    Object.entries(DEPARTMENTS).forEach(([dKey, d]) => {
+      const list = nurses.filter(n => n.dept === dKey);
+      if (!list.length) return;
+      container.appendChild(el("div", { style: { fontSize: "12.5px", fontWeight: "800", color: d.color, margin: "0 16px 6px" } }, d.name));
+      list.forEach(n => {
+        const row = el("div", { class: "nurse-row" });
+        row.appendChild(el("div", null, [
+          el("div", { style: { fontWeight: "700", fontSize: "13.5px", color: n.disabled ? "#aaa" : "#37505f" } }, n.name + (n.disabled ? " (ڕاگیراوە)" : "")),
+          el("div", { style: { fontSize: "11.5px", color: "#9aabb5", direction: "ltr", textAlign: "right" } }, "@" + n.username),
+        ]));
+        const actions = el("div", { style: { display: "flex", gap: "6px" } });
+
+        const select = el("select", { class: "mini-select" });
+        Object.entries(DEPARTMENTS).forEach(([k,dd]) => {
+          const opt = el("option", { value: k }, dd.name);
+          if (k === n.dept) opt.selected = true;
+          select.appendChild(opt);
+        });
+        select.addEventListener("change", async () => {
+          await setDoc("nurses", n.id, { ...n, dept: select.value });
+          nurses = await getNurses(); draw();
+        });
+
+        const resetBtn = el("button", { class: "mini-btn", title: "گۆڕینی وشەی نهێنی" }, "🔑");
+        resetBtn.addEventListener("click", async () => {
+          const tempPass = String(Math.floor(1000 + Math.random()*9000));
+          await setDoc("nurses", n.id, { ...n, password: tempPass, mustChangePassword: true });
+          createdInfo = { ...n, password: tempPass };
+          nurses = await getNurses(); draw();
+        });
+
+        const toggleBtn = el("button", { class: "mini-btn", title: "ڕاگرتن/چالاککردن" }, n.disabled ? "▶️" : "⏸");
+        toggleBtn.addEventListener("click", async () => {
+          await setDoc("nurses", n.id, { ...n, disabled: !n.disabled });
+          nurses = await getNurses(); draw();
+        });
+
+        const delBtn = el("button", { class: "mini-btn", style: { color: "#c0392b" }, title: "سرینەوە" }, "🗑");
+        delBtn.addEventListener("click", async () => {
+          if (!confirm("دڵنیایت لە سرینەوەی ئەم ئەکاونتە؟")) return;
+          await db.collection("nurses").doc(n.id).delete();
+          nurses = await getNurses(); draw();
+        });
+
+        actions.appendChild(select); actions.appendChild(resetBtn); actions.appendChild(toggleBtn); actions.appendChild(delBtn);
+        row.appendChild(actions);
+        container.appendChild(row);
+      });
+    });
+
+    if (!nurses.length) container.appendChild(el("div", { class: "muted", style: { textAlign: "center", padding: "30px" } }, "هیچ نێرسێک زیاد نەکراوە"));
+  }
+
+  draw();
+}
+
+async function buildAdminRoster(container, deptKey, setDeptKey) {
+  const dept = DEPARTMENTS[deptKey];
+  const today = new Date();
+  let cursor = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  const pickerRow = el("div", { class: "dept-picker-row" });
+  Object.entries(DEPARTMENTS).forEach(([k,d]) => {
+    const pill = el("button", {
+      class: "dept-pill",
+      style: { background: deptKey === k ? d.color : "#fff", color: deptKey === k ? "#fff" : "#37505f", borderColor: deptKey === k ? d.color : "#e3edf2" },
+      onClick: () => setDeptKey(k),
+    }, d.name);
+    pickerRow.appendChild(pill);
+  });
+  container.appendChild(pickerRow);
+
+  const navHolder = el("div");
+  const actionsHolder = el("div", { style: { display: "flex", gap: "8px", margin: "0 16px 14px" } });
+  const daysHolder = el("div", { style: { padding: "0 16px 60px" } });
+  container.appendChild(navHolder);
+  container.appendChild(actionsHolder);
+  container.appendChild(daysHolder);
+
+  let roster = { days: {} };
+  let activeMonths = [];
+
+  async function load() {
+    const mKey = monthKey(cursor);
+    roster = await getRoster(deptKey, mKey);
+    activeMonths = await getActiveMonths();
+    drawAll();
+  }
+
+  function drawAll() {
+    drawNav();
+    drawActions();
+    drawDays();
+  }
+
+  function drawNav() {
+    clear(navHolder);
+    const mKey = monthKey(cursor);
+    const isActive = activeMonths.includes(mKey);
+    navHolder.appendChild(buildMonthNav(cursor, isActive,
+      () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth()-1, 1); load(); },
+      () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1); load(); }
+    ));
+  }
+
+  function drawActions() {
+    clear(actionsHolder);
+    const mKey = monthKey(cursor);
+    const isActive = activeMonths.includes(mKey);
+
+    const toggleBtn = el("button", { class: "btn-primary" + (isActive ? " btn-danger" : ""), style: { flex: "1" } }, isActive ? "🔒 ناچالاککردنی ئەم مانگە" : "✅ چالاککردنی ئەم مانگە");
+    toggleBtn.addEventListener("click", async () => {
+      const months = await getActiveMonths();
+      const updated = isActive ? months.filter(m => m !== mKey) : [...months, mKey];
+      await setActiveMonths(updated);
+      activeMonths = updated;
+      drawAll();
+    });
+
+    const exportBtn = el("button", { class: "btn-primary btn-dark", style: { flex: "1" } }, "📥 داونلۆدی ئەکسل");
+    exportBtn.addEventListener("click", () => exportExcel(deptKey, activeMonths, mKey));
+
+    actionsHolder.appendChild(toggleBtn);
+    actionsHolder.appendChild(exportBtn);
+  }
+
+  function drawDays() {
+    clear(daysHolder);
+    const dim = daysInMonth(cursor.getFullYear(), cursor.getMonth());
+    for (let day = 1; day <= dim; day++) {
+      const dayData = roster.days[day] || { cells: {}, notes: [], locked: false };
+      daysHolder.appendChild(buildDayCard({
+        day, cursor, dept, data: dayData, adminMode: true,
+        onToggleLock: () => toggleLock(day),
+        onClearCell: (rowKey) => clearCell(day, rowKey),
+      }));
+    }
+  }
+
+  async function toggleLock(day) {
+    const mKey = monthKey(cursor);
+    const fresh = await getRoster(deptKey, mKey);
+    const dayData = fresh.days[day] || { cells: {}, notes: [], locked: false };
+    dayData.locked = !dayData.locked;
+    fresh.days[day] = dayData;
+    await setRoster(deptKey, mKey, fresh);
+    roster = fresh;
+    drawDays();
+  }
+
+  async function clearCell(day, rowKey) {
+    const mKey = monthKey(cursor);
+    const fresh = await getRoster(deptKey, mKey);
+    const dayData = fresh.days[day] || { cells: {}, notes: [], locked: false };
+    delete dayData.cells[rowKey];
+    fresh.days[day] = dayData;
+    await setRoster(deptKey, mKey, fresh);
+    roster = fresh;
+    drawDays();
+  }
+
+  load();
+}
+
+async function exportExcel(deptKey, activeMonths, currentMonthKey) {
+  const dept = DEPARTMENTS[deptKey];
+  const wb = XLSX.utils.book_new();
+  let monthsToExport = Array.from(new Set(activeMonths)).sort();
+  if (!monthsToExport.length) monthsToExport = [currentMonthKey];
+
+  for (const mk of monthsToExport) {
+    const data = await getRoster(deptKey, mk);
+    const [y, mo] = mk.split("-").map(Number);
+    const dim = daysInMonth(y, mo - 1);
+
+    const rows = [];
+    const header = ["ڕۆژ", "بەروار", ...dept.rows.map(r => r.label), ...Array.from({length: dept.notes}, (_,i) => `Note ${i+1}`), "کۆی کاتژمێر"];
+    rows.push(header);
+
+    for (let d = 1; d <= dim; d++) {
+      const dayData = data.days[d] || { cells: {}, notes: [] };
+      const weekday = WEEKDAYS[new Date(y, mo-1, d).getDay()];
+      let total = 0;
+      const cellVals = dept.rows.map(row => {
+        const c = dayData.cells?.[row.key];
+        if (!c) return "";
+        total += c.hours || 0;
+        return c.isFreeText ? `${c.name} (${c.short})` : c.name;
+      });
+      const noteVals = Array.from({length: dept.notes}, (_,i) => dayData.notes?.[i] || "");
+      rows.push([weekday, `${d}/${mo}/${y}`, ...cellVals, ...noteVals, total]);
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws["!cols"] = [{wch:12},{wch:12}, ...dept.rows.map(()=>({wch:16})), ...Array.from({length:dept.notes},()=>({wch:18})), {wch:10}];
+    const sheetName = `${KURDISH_MONTHS[mo-1]}_${y}`.slice(0,31);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  }
+
+  XLSX.writeFile(wb, `CMC_${dept.sub.replace(/\s/g,"_")}_راپۆرت.xlsx`);
+}
+
+boot();
+</script>
 </body>
 </html>
